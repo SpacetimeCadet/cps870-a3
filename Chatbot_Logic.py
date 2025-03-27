@@ -9,18 +9,9 @@ input_file = "input.csv"
 
 
 class CSVQuestionAnswerer:
-    """
-    A simple question answering system that uses pandas to query a CSV file
-    based on natural language questions.
-    """
     
     def __init__(self, csv_path=input_file):
-        """
-        Initialize the question answering system with a CSV file.
-        
-        Args:
-            csv_path (str): Path to the CSV file to be queried.
-        """
+        # Load CSV
         self.csv_path = csv_path
         try:
             self.df = pd.read_csv(csv_path)
@@ -33,9 +24,42 @@ class CSVQuestionAnswerer:
             # Store some sample data for understanding the content
             self.sample_data = self.df.head(3)
             
+            # Define mappings between query types and row headers
+            # This is the key modification - instead of identifying columns,
+            # we'll map query types to specific row headers
+            self.query_to_row_mapping = {
+                'sentiment': ['Sentiment', 'Outcome', 'Result'],
+                'turnover_type': ['Type', 'Category', 'Turnover Type'],
+                'name': ['Name', 'CEO', 'Executive', 'Leader'],
+                'date': ['Date', 'When', 'Time', 'Period'],
+                'reason': ['Reason', 'Cause', 'Why'],
+                # Add more mappings as needed for your specific CSV structure
+            }
+            
+            # Identify the first row to check if it contains headers
+            self.has_header_row = self._check_for_header_row()
+            
         except Exception as e:
             print(f"Error loading CSV file: {e}")
             self.df = None
+    
+    def _check_for_header_row(self):
+        """
+        Check if the first row might contain header information rather than data
+        
+        Returns:
+            bool: True if the first row appears to be a header row
+        """
+        # Simple heuristic - if the first column of the first row contains
+        # a string that matches any of our known header types
+        if len(self.df) > 0:
+            first_row = self.df.iloc[0]
+            for header_list in self.query_to_row_mapping.values():
+                for header in header_list:
+                    for col in self.df.columns:
+                        if isinstance(first_row[col], str) and header.lower() in first_row[col].lower():
+                            return True
+        return False
     
     def _preprocess_question(self, question):
         """
@@ -67,23 +91,23 @@ class CSVQuestionAnswerer:
         """
         # Remove common stop words
         stop_words = ['the', 'a', 'an', 'in', 'on', 'at', 'is', 'are', 'and', 
-                      'to', 'of', 'for', 'with', 'what', 'which', 'who', 'where',
+                      'to', 'of', 'for', 'with', 'what', 'which', 'where',
                       'when', 'how', 'many', 'much', 'do', 'does', 'list', 'tell',
                       'me', 'show', 'give', 'find', 'all', 'that', 'have', 'has']
         
         words = [word for word in question.split() if word not in stop_words]
         
-        # Add column names as potential keywords
-        column_keywords = []
-        for col in self.df.columns:
-            col_lower = col.lower()
-            # Include both the full column name and its individual parts
-            column_keywords.append(col_lower)
-            parts = re.sub(r'[^a-zA-Z0-9\s]', ' ', col_lower).split()
-            column_keywords.extend(parts)
+        # Add potential row headers as keywords
+        header_keywords = []
+        for header_list in self.query_to_row_mapping.values():
+            for header in header_list:
+                header_lower = header.lower()
+                header_keywords.append(header_lower)
+                parts = re.sub(r'[^a-zA-Z0-9\s]', ' ', header_lower).split()
+                header_keywords.extend(parts)
         
-        # Create a set of keywords from column names, question words, and their combinations
-        all_keywords = set(words + column_keywords)
+        # Create a set of keywords from headers and question words
+        all_keywords = set(words + header_keywords)
         
         return list(all_keywords)
     
@@ -95,128 +119,50 @@ class CSVQuestionAnswerer:
             question (str): The preprocessed question.
             
         Returns:
-            str: Type of query (e.g., 'sum', 'average', 'count', 'max', 'min', 'filter').
+            str: Type of query
         """
-        # Aggregate functions
-        if any(w in question for w in ['sum', 'total', 'add']):
-            return 'sum'
-        elif any(w in question for w in ['average', 'avg', 'mean']):
-            return 'average'
-        elif any(w in question for w in ['count', 'how many', 'number of']):
-            return 'count'
-        elif any(w in question for w in ['maximum', 'max', 'highest', 'largest', 'most']):
-            return 'max'
-        elif any(w in question for w in ['minimum', 'min', 'lowest', 'smallest', 'least']):
-            return 'min'
-        elif any(w in question for w in ['greater than', 'more than', 'bigger than', 'larger than']):
-            return 'greater_than'
-        elif any(w in question for w in ['less than', 'smaller than', 'lower than']):
-            return 'less_than'
-        elif any(w in question for w in ['top', 'bottom']):
-            return 'top_n'
+        # Check for each query type using keywords
+        query_type_scores = {}
+        for query_type, headers in self.query_to_row_mapping.items():
+            score = 0
+            # Check for direct header matches
+            for header in headers:
+                if header.lower() in question:
+                    score += 2
+            
+            # Check for related question words
+            if query_type == 'sentiment' and any(w in question for w in ['happen', 'result', 'outcome']):
+                score += 1
+            elif query_type == 'turnover_type' and any(w in question for w in ['voluntary', 'involuntary', 'fired', 'quit']):
+                score += 1
+            elif query_type == 'name' and any(w in question for w in ['who', 'person', 'individual']):
+                score += 1
+            elif query_type == 'date' and any(w in question for w in ['when', 'time', 'day', 'month', 'year']):
+                score += 1
+            elif query_type == 'reason' and any(w in question for w in ['why', 'because', 'due to']):
+                score += 1
+            
+            if score > 0:
+                query_type_scores[query_type] = score
         
-        # Default query type is filter
+        # Select the query type with the highest score
+        if query_type_scores:
+            return max(query_type_scores.items(), key=lambda x: x[1])[0]
+        
+        # Default query type
         return 'filter'
     
-    def _identify_columns(self, question, keywords):
+    def _extract_entity_name(self, question):
         """
-        Identify relevant columns based on question and keywords.
-        
-        Args:
-            question (str): The preprocessed question.
-            keywords (list): Extracted keywords.
-            
-        Returns:
-            list: Relevant column names.
-        """
-        relevant_columns = []
-        
-        # Score each column based on how many of its words appear in the question
-        column_scores = {}
-        for col in self.df.columns:
-            col_lower = col.lower()
-            
-            # Direct match
-            if col_lower in question:
-                relevant_columns.append(col)
-                continue
-            
-            # Word-by-word match
-            col_words = re.sub(r'[^a-zA-Z0-9\s]', ' ', col_lower).split()
-            match_score = sum(1 for word in col_words if word in keywords)
-            
-            # Only consider columns with at least one matching word
-            if match_score > 0:
-                column_scores[col] = match_score
-        
-        # Add columns with the highest scores
-        if column_scores:
-            max_score = max(column_scores.values())
-            for col, score in column_scores.items():
-                if score == max_score and col not in relevant_columns:
-                    relevant_columns.append(col)
-        
-        # If no columns are found, try to infer from question and data types
-        if not relevant_columns:
-            if 'average' in question or 'sum' in question or any(w in question for w in ['most', 'least', 'highest', 'lowest']):
-                # For aggregate functions, prefer numeric columns
-                for col, dtype in self.column_types.items():
-                    if 'int' in dtype or 'float' in dtype:
-                        relevant_columns.append(col)
-            elif any(w in question for w in ['date', 'when', 'time', 'year', 'month', 'day']):
-                # For time-related questions, prefer date columns
-                for col in self.df.columns:
-                    if any(w in col.lower() for w in ['date', 'time', 'year', 'month', 'day']):
-                        relevant_columns.append(col)
-        
-        # If still no columns, include all columns
-        if not relevant_columns:
-            relevant_columns = list(self.df.columns)
-        
-        return relevant_columns
-    
-    def _extract_numeric_value(self, question):
-        """
-        Extract numeric values from the question.
+        Extract a potential entity name (like a CEO or company name) from the question.
         
         Args:
             question (str): The natural language question.
             
         Returns:
-            float or None: Extracted numeric value, if any.
+            str or None: Extracted entity name, if any.
         """
-        # Look for numeric patterns in the question
-        numbers = re.findall(r'\d+\.?\d*', question)
-        if numbers:
-            return float(numbers[0])
-        return None
-    
-    def _extract_string_value(self, question, keywords):
-        """
-        Extract string values from the question.
-        
-        Args:
-            question (str): The natural language question.
-            keywords (list): Extracted keywords.
-            
-        Returns:
-            str or None: Extracted string value, if any.
-        """
-        # Look for patterns like "contains X" or "equals X"
-        patterns = [
-            r'contains\s+([a-zA-Z0-9_\s]+)',
-            r'equals\s+([a-zA-Z0-9_\s]+)',
-            r'equal to\s+([a-zA-Z0-9_\s]+)',
-            r'is\s+([a-zA-Z0-9_\s]+)',
-            r'where\s+([a-zA-Z0-9_\s]+)'
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, question)
-            if match:
-                return match.group(1).strip()
-        
-        # Look for quoted strings
+        # Look for quoted strings which often contain names
         match = re.search(r'"([^"]+)"', question)
         if match:
             return match.group(1)
@@ -225,137 +171,128 @@ class CSVQuestionAnswerer:
         if match:
             return match.group(1)
         
-        # Find words that are not column names or common keywords
-        column_words = []
-        for col in self.df.columns:
-            column_words.extend(col.lower().split())
-        
-        common_words = ['what', 'which', 'who', 'where', 'when', 'how', 'many', 
-                        'show', 'display', 'find', 'get', 'list', 'tell']
-        
-        question_words = question.split()
-        potential_values = [word for word in question_words 
-                            if word not in column_words 
-                            and word not in common_words
-                            and word not in keywords]
-        
-        if potential_values:
-            return potential_values[0]
+        # Look for capitalized words which might be names
+        words = re.findall(r'\b[A-Z][a-z]*\b', question)
+        if words:
+            # Join consecutive capitalized words as they might form a name
+            names = []
+            current_name = []
+            
+            for word in words:
+                current_name.append(word)
+                if len(current_name) > 0 and len(words) > words.index(word) + 1:
+                    if not words[words.index(word) + 1].istitle():
+                        names.append(' '.join(current_name))
+                        current_name = []
+            
+            if current_name:
+                names.append(' '.join(current_name))
+            
+            if names:
+                return names[0]
         
         return None
     
-    def _execute_query(self, query_type, columns, numeric_value=None, string_value=None):
+    def _find_row_by_header_and_entity(self, query_type, entity_name=None):
         """
-        Execute the query based on identified parameters.
+        Find a row by matching the header type and optionally an entity name.
         
         Args:
             query_type (str): Type of query.
-            columns (list): Columns to query.
-            numeric_value (float, optional): Numeric value for comparison.
-            string_value (str, optional): String value for comparison.
+            entity_name (str, optional): Entity name to search for.
             
         Returns:
-            str: Query result.
+            pandas.Series or None: Matching row if found.
         """
-        if not columns:
-            return "No relevant columns identified."
+        if self.df is None or self.df.empty:
+            return None
         
-        try:
-            # For aggregate queries
-            if query_type == 'sum':
-                numeric_cols = [col for col in columns if 'int' in self.column_types[col] or 'float' in self.column_types[col]]
-                if not numeric_cols:
-                    return "No numeric columns found for summing."
-                results = {col: self.df[col].sum() for col in numeric_cols}
-                return f"Sum: {results}"
-                
-            elif query_type == 'average':
-                numeric_cols = [col for col in columns if 'int' in self.column_types[col] or 'float' in self.column_types[col]]
-                if not numeric_cols:
-                    return "No numeric columns found for averaging."
-                results = {col: self.df[col].mean() for col in numeric_cols}
-                return f"Average: {results}"
-                
-            elif query_type == 'count':
-                if string_value:
-                    counts = {}
-                    for col in columns:
-                        if self.df[col].dtype == 'object':  # String column
-                            count = self.df[self.df[col].str.contains(string_value, case=False, na=False)].shape[0]
-                            counts[col] = count
-                    if counts:
-                        return f"Count of records containing '{string_value}': {counts}"
-                
-                return f"Total records: {len(self.df)}"
-                
-            elif query_type == 'max':
-                numeric_cols = [col for col in columns if 'int' in self.column_types[col] or 'float' in self.column_types[col]]
-                if not numeric_cols:
-                    return "No numeric columns found for maximum."
-                results = {col: self.df[col].max() for col in numeric_cols}
-                return f"Maximum: {results}"
-                
-            elif query_type == 'min':
-                numeric_cols = [col for col in columns if 'int' in self.column_types[col] or 'float' in self.column_types[col]]
-                if not numeric_cols:
-                    return "No numeric columns found for minimum."
-                results = {col: self.df[col].min() for col in numeric_cols}
-                return f"Minimum: {results}"
-                
-            elif query_type == 'greater_than':
-                if numeric_value is None:
-                    return "No value specified for comparison."
-                numeric_cols = [col for col in columns if 'int' in self.column_types[col] or 'float' in self.column_types[col]]
-                if not numeric_cols:
-                    return "No numeric columns found for comparison."
-                filtered_data = self.df[self.df[numeric_cols[0]] > numeric_value]
-                return f"Records where {numeric_cols[0]} > {numeric_value}:\n{filtered_data.head(5).to_string()}\n... and {len(filtered_data) - 5} more records" if len(filtered_data) > 5 else filtered_data.to_string()
-                
-            elif query_type == 'less_than':
-                if numeric_value is None:
-                    return "No value specified for comparison."
-                numeric_cols = [col for col in columns if 'int' in self.column_types[col] or 'float' in self.column_types[col]]
-                if not numeric_cols:
-                    return "No numeric columns found for comparison."
-                filtered_data = self.df[self.df[numeric_cols[0]] < numeric_value]
-                return f"Records where {numeric_cols[0]} < {numeric_value}:\n{filtered_data.head(5).to_string()}\n... and {len(filtered_data) - 5} more records" if len(filtered_data) > 5 else filtered_data.to_string()
-                
-            elif query_type == 'top_n':
-                n = int(numeric_value) if numeric_value else 5
-                numeric_cols = [col for col in columns if 'int' in self.column_types[col] or 'float' in self.column_types[col]]
-                if not numeric_cols:
-                    return "No numeric columns found for top/bottom ranking."
-                if 'top' in query_type:
-                    sorted_data = self.df.sort_values(by=numeric_cols[0], ascending=False).head(n)
-                    return f"Top {n} records by {numeric_cols[0]}:\n{sorted_data.to_string()}"
-                else:
-                    sorted_data = self.df.sort_values(by=numeric_cols[0], ascending=True).head(n)
-                    return f"Bottom {n} records by {numeric_cols[0]}:\n{sorted_data.to_string()}"
+        # Get possible headers for this query type
+        possible_headers = self.query_to_row_mapping.get(query_type, [])
+        
+        # If we have a header row, search for the column containing the header
+        if self.has_header_row:
+            first_row = self.df.iloc[0]
+            for col in self.df.columns:
+                cell_value = str(first_row[col]).lower()
+                if any(header.lower() in cell_value for header in possible_headers):
+                    # Found a header match - now look for the entity if provided
+                    if entity_name:
+                        for i, row in self.df.iterrows():
+                            if i == 0:  # Skip the header row
+                                continue
+                            # Check if the entity name appears in the row
+                            row_values = ' '.join(str(val).lower() for val in row.values)
+                            if entity_name.lower() in row_values:
+                                return row
+                    else:
+                        # If no entity, return the first data row
+                        if len(self.df) > 1:
+                            return self.df.iloc[1]  # Return the row after the header
+        
+        # If no header row or no match found, search all cells for header and entity
+        for i, row in self.df.iterrows():
+            row_values = ' '.join(str(val).lower() for val in row.values)
             
-            # Default: filter or show relevant columns
+            # Check if any header appears in the row
+            if any(header.lower() in row_values for header in possible_headers):
+                # If entity provided, check if it also appears in the row
+                if entity_name:
+                    if entity_name.lower() in row_values:
+                        return row
+                else:
+                    return row  # Return the first row with a header match
+        
+        return None
+    
+    def _format_row_response(self, row, query_type):
+        """
+        Format a row into a human-readable response based on the query type.
+        
+        Args:
+            row (pandas.Series): DataFrame row.
+            query_type (str): Type of query.
+            
+        Returns:
+            str: Formatted response.
+        """
+        if row is None:
+            return f"No information found for this {query_type} query."
+        
+        # Get possible headers for this query type
+        possible_headers = self.query_to_row_mapping.get(query_type, [])
+        
+        # Try to find the value corresponding to the header
+        header_col = None
+        header_value = None
+        
+        for col in self.df.columns:
+            cell_value = str(row[col])
+            if any(header.lower() in cell_value.lower() for header in possible_headers):
+                header_col = col
+                header_value = cell_value
+                break
+        
+        if header_col is not None:
+            # Find the adjacent column that might contain the answer
+            cols = list(self.df.columns)
+            header_idx = cols.index(header_col)
+            
+            # Try to find a value column (usually to the right of the header)
+            if header_idx + 1 < len(cols):
+                answer_col = cols[header_idx + 1]
+                answer_value = row[answer_col]
+                return f"{header_value}: {answer_value}"
             else:
-                if string_value:
-                    # Try to find matches in string columns
-                    str_cols = [col for col in columns if self.df[col].dtype == 'object']
-                    if str_cols:
-                        # Create a filter condition that matches the string value in any of the string columns
-                        filter_condition = False
-                        for col in str_cols:
-                            filter_condition = filter_condition | self.df[col].str.contains(string_value, case=False, na=False)
-                        
-                        filtered_data = self.df[filter_condition]
-                        if not filtered_data.empty:
-                            return f"Filtered results containing '{string_value}':\n{filtered_data.head(5).to_string()}\n... and {len(filtered_data) - 5} more records" if len(filtered_data) > 5 else filtered_data.to_string()
-                    
-                # If no string value or no matches, show a sample of the relevant columns
-                return f"Sample of relevant columns:\n{self.df[columns].head(5).to_string()}"
-                
-        except Exception as e:
-            return f"Error executing query: {e}"
+                # If no adjacent column, return the whole row
+                return f"Found information: {row.to_string()}"
+        else:
+            # If no specific header column is found, return the whole row
+            return f"Related information:\n{row.to_string()}"
     
     def answer_question(self, question):
         """
-        Answer a natural language question by querying the CSV file.
+        Answer a natural language question by looking up row headers in the CSV.
         
         Args:
             question (str): The natural language question.
@@ -375,24 +312,23 @@ class CSVQuestionAnswerer:
         # Identify query type
         query_type = self._identify_query_type(processed_question)
         
-        # Identify relevant columns
-        columns = self._identify_columns(processed_question, keywords)
-        
-        # Extract values for filtering
-        numeric_value = self._extract_numeric_value(processed_question)
-        string_value = self._extract_string_value(processed_question, keywords)
+        # Extract entity name if present
+        entity_name = self._extract_entity_name(question)
         
         # Debug information
-        print(f"Question: {question}")
-        print(f"Processed: {processed_question}")
-        print(f"Keywords: {keywords}")
-        print(f"Query type: {query_type}")
-        print(f"Columns: {columns}")
-        print(f"Numeric value: {numeric_value}")
-        print(f"String value: {string_value}")
+        debug_info = f"""
+        Question: {question}
+        Processed: {processed_question}
+        Query type: {query_type}
+        Entity name: {entity_name}
+        """
+        print(debug_info)
         
-        # Execute the query
-        answer = self._execute_query(query_type, columns, numeric_value, string_value)
+        # Find the row that matches the query type and entity
+        matching_row = self._find_row_by_header_and_entity(query_type, entity_name)
+        
+        # Format the response
+        answer = self._format_row_response(matching_row, query_type)
         
         return answer
 

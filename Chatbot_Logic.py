@@ -4,13 +4,17 @@ import string
 from collections import Counter
 import numpy as np
 
+# Global Variables
+input_file = "input.csv"
+
+
 class CSVQuestionAnswerer:
     """
     A simple question answering system that uses pandas to query a CSV file
     based on natural language questions.
     """
     
-    def __init__(self, csv_path="input.csv"):
+    def __init__(self, csv_path=input_file):
         """
         Initialize the question answering system with a CSV file.
         
@@ -360,7 +364,7 @@ class CSVQuestionAnswerer:
             str: Answer to the question.
         """
         if self.df is None:
-            return "CSV file not loaded successfully."
+            return "CSV file failed to load."
         
         # Preprocess the question
         processed_question = self._preprocess_question(question)
@@ -399,11 +403,11 @@ def main():
     """
     qa_system = CSVQuestionAnswerer()
     
-    print("\nWelcome to the CSV Question Answering System!")
+    print("\nWelcome to CEO Insights")
     print("Type 'exit' to quit.")
     
     while True:
-        question = input("\nAsk a question about the data: ")
+        question = input("\nWhat would you like to know?: ")
         
         if question.lower() == 'exit':
             print("Goodbye!")

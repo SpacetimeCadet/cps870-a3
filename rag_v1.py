@@ -22,7 +22,7 @@ llm = Mistral(api_key = api_key)
 chat_model = "mistral-large-latest"
 embedding_model = "mistral-embed"
 fact_file_path = ('./data/perf_sent.csv')
-articles_file_path = ('../CHECKME2.csv')
+articles_file_path = ('./data/CHECKME2.csv')
 
 df = pd.read_csv(fact_file_path)
 # exec_name,company,end_year,ticker,

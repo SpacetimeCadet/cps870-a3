@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import faiss
 import time
+from tenacity import retry, stop_after_attempt, wait_exponential
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_community.vectorstores import FAISS
 from flask import Flask, render_template, request
@@ -21,7 +22,7 @@ llm = Mistral(api_key = api_key)
 chat_model = "mistral-large-latest"
 embedding_model = "mistral-embed"
 fact_file_path = ('./data/perf_sent.csv')
-articles_file_path = ('../CHECKME3.csv')
+articles_file_path = ('../CHECKME2.csv')
 
 df = pd.read_csv(fact_file_path)
 # exec_name,company,end_year,ticker,
@@ -73,7 +74,7 @@ def verbalize(row):
     )
 
 # chunk articles longer than 8k token limit
-def verbalize_article_chunks(row, chunk_len=32000, overlap=200):
+def verbalize_article_chunks(row, chunk_len=15000, overlap=200):
     content = row['content']
     chunks = []
     for i in range(0, len(content), chunk_len - overlap):
@@ -86,14 +87,24 @@ def verbalize_article_chunks(row, chunk_len=32000, overlap=200):
         chunks.append(chunk)
     return chunks
 
+def embed_batch(c):
+    time.sleep(1.6)
+    return llm.embeddings.create(model=embedding_model, inputs=c)
+
+
 def get_embeddings_by_chunks(data, chunk_size):
     chunks = [data[x : x + chunk_size] for x in range(0, len(data), chunk_size)]
     embeddings_response = []
-    for c in chunks:
-        response = llm.embeddings.create(model=embedding_model, inputs=c)
+    
+    for i, c in enumerate(chunks):
+        if i > 0:
+            time.sleep(1.6)  # sleep *before* to control timing
+        print(f"embedding chunk {i+1}/{len(chunks)} at {time.strftime('%H:%M:%S')}")
+        response = embed_batch(c)
         embeddings_response.append(response)
-        time.sleep(1) 
+
     return [d.embedding for e in embeddings_response for d in e.data]
+
 
 # query types
 # what was sentiment before X	                facts only
@@ -116,12 +127,7 @@ def classify_query(query):
     else:
         return "facts"
 
-def retrieve(texts, embeddings, query, k=7):
-    # Build the FAISS index
-    
-    index = faiss.IndexFlatL2(embeddings.shape[1])
-    index.add(embeddings)
-
+def retrieve(index, texts, query, k=7):
     # Query embedding
     query_embedding = llm.embeddings.create(
         model=embedding_model,
@@ -149,9 +155,31 @@ for _, row in df2.iterrows():
     for chunk in verbalize_article_chunks(row):
         article_text_chunks.append(chunk)
 
-embeddings = np.array(get_embeddings_by_chunks(texts, 100))
-art_embeddings = np.array(get_embeddings_by_chunks(article_text_chunks, 20))
+# LOAD
 
+if os.path.exists("./data/fact_embeddings.npy"):
+    embeddings = np.load("./data/fact_embeddings.npy")
+else:
+    embeddings = np.array(get_embeddings_by_chunks(texts, 100))
+    np.save("./data/fact_embeddings.npy", embeddings)
+
+if os.path.exists("./data/article_embeddings.npy"):
+    art_embeddings = np.load("./data/article_embeddings.npy")
+else:
+    art_embeddings = np.array(get_embeddings_by_chunks(article_text_chunks, 12))
+    np.save("./data/article_embeddings.npy", art_embeddings)
+
+
+
+# embeddings = np.array(get_embeddings_by_chunks(texts, 100))
+# art_embeddings = np.array(get_embeddings_by_chunks(article_text_chunks, 20))
+
+# Build the FAISS index once
+index_facts = faiss.IndexFlatL2(embeddings.shape[1])
+index_facts.add(embeddings)
+
+index_articles = faiss.IndexFlatL2(art_embeddings.shape[1])
+index_articles.add(art_embeddings)
 
 @app.route("/")
 def index():
@@ -170,9 +198,9 @@ def chatbot_response():
     prompt = "Using primarily the following information, please tell me "
     
     if classify_query(query) == 'articles':
-        retrieved_texts = retrieve(article_text_chunks, art_embeddings, query)
+        retrieved_texts = retrieve(index_articles, article_text_chunks, query)
     else:
-        retrieved_texts = retrieve(texts, embeddings, query)
+        retrieved_texts = retrieve(index_facts, texts, query)
     
     # print(f'retrieved texts: {retrieved_texts}\n')
     input_text = prompt + query + "\n" + "\n".join(retrieved_texts[:3])

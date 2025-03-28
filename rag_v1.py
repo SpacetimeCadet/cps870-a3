@@ -135,8 +135,12 @@ def retrieve(texts, embeddings, query, k=7):
     retrieved_docs = [texts[i] for i in indices[0]]
     return retrieved_docs
 
-
-
+def get_random_ceos(num=3):
+    unique_ceos = df.drop_duplicates(subset=['exec_name', 'company'])
+    if len(unique_ceos) < num:
+        num = len(unique_ceos)
+    sample = unique_ceos.sample(n=num)
+    return [(row['exec_name'], row['company']) for _, row in sample.iterrows()]
 
 texts = df.apply(verbalize, axis=1).tolist()
 

@@ -9,6 +9,7 @@ import time
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_community.vectorstores import FAISS
 from flask import Flask, render_template, request
+from markupsafe import Markup
 
 # Initialize User Interface
 app = Flask (__name__)
@@ -36,39 +37,39 @@ df2 = df2[df2['sentiment_score'] != 0.0]
 
 def verbalize(row):
     return (
-        f"Executive {row['exec_name']} left {row['ticker']} {row['company']} in {row['end_month']}/{row['end_year']}. "
-        f"{row['exec_name']} had a tenure length of {row['tenure_len']} years starting from {row['start_year']} to {row['end_year']}. "
+        f"Executive {row['exec_name']} left {row['ticker']} {row['company']} in {row['end_month']}/{row['end_year']}.\n"
+        f"{row['exec_name']} had a tenure length of {row['tenure_len']} years starting from {row['start_year']} to {row['end_year']}. \n"
         
-        f"The average closing price over the 12 months before departure was ${row['avg_close_before']}. "
-        f"In the 12 months after, the average closing price was ${row['avg_close_after']}. "
-        f"The stock price changed by ${row['price_change']} over that period. "
-        f"This represents a {row['percent_change']}% {'increase' if row['percent_change'] >= 0 else 'decrease'} in price. "
+        f"The average closing price over the 12 months before departure was ${row['avg_close_before']}. \n"
+        f"In the 12 months after, the average closing price was ${row['avg_close_after']}. \n"
+        f"The stock price changed by ${row['price_change']} over that period. \n"
+        f"This represents a {row['percent_change']}% {'increase' if row['percent_change'] >= 0 else 'decrease'} in price. \n\n"
 
-        f"Volatility in the 12 months before departure was {row['volatility_before']}. "
-        f"Volatility 12 months after the departure was {row['volatility_after']}. "
-        f"This reflects a change in volatility of {row['volatility_change']}. "
+        f"Volatility in the 12 months before departure was {row['volatility_before']}. \n"
+        f"Volatility 12 months after the departure was {row['volatility_after']}. \n"
+        f"This reflects a change in volatility of {row['volatility_change']}. \n"
 
-        f"The average closing price over the 3 months before departure was ${row['avg_close_before_3mo']}. "
-        f"In the 3 months after, the average closing price was ${row['avg_close_after_3mo']}. "
-        f"The stock price changed by ${row['price_change_3mo']} over that period. "
-        f"This represents a {row['percent_change_3mo']}% {'increase' if row['percent_change_3mo'] >= 0 else 'decrease'} in price. "
+        f"The average closing price over the 3 months before departure was ${row['avg_close_before_3mo']}. \n"
+        f"In the 3 months after, the average closing price was ${row['avg_close_after_3mo']}. \n"
+        f"The stock price changed by ${row['price_change_3mo']} over that period. \n"
+        f"This represents a {row['percent_change_3mo']}% {'increase' if row['percent_change_3mo'] >= 0 else 'decrease'} in price. \n"
 
-        f"Volatility in the 3 months before departure was {row['volatility_before_3mo']}. "
-        f"Volatility 3 months after the departure was {row['volatility_after_3mo']}. "
-        f"This reflects a change in volatility of {row['volatility_change_3mo']}. "
+        f"Volatility in the 3 months before departure was {row['volatility_before_3mo']}. \n"
+        f"Volatility 3 months after the departure was {row['volatility_after_3mo']}. \n"
+        f"This reflects a change in volatility of {row['volatility_change_3mo']}. \n\n"
 
-        f"The average closing price over the 1 month before departure was ${row['avg_close_before_1mo']}. "
-        f"In the 1 month after, the average closing price was ${row['avg_close_after_1mo']}. "
-        f"The stock price changed by ${row['price_change_1mo']} over that period. "
-        f"This represents a {row['percent_change_1mo']}% {'increase' if row['percent_change_1mo'] >= 0 else 'decrease'} in price. "
+        f"The average closing price over the 1 month before departure was ${row['avg_close_before_1mo']}. \n"
+        f"In the 1 month after, the average closing price was ${row['avg_close_after_1mo']}. \n"
+        f"The stock price changed by ${row['price_change_1mo']} over that period. \n"
+        f"This represents a {row['percent_change_1mo']}% {'increase' if row['percent_change_1mo'] >= 0 else 'decrease'} in price. \n\n"
 
-        f"Volatility in the 1 months before departure was {row['volatility_before_1mo']}. "
-        f"Volatility 1 month after the departure was {row['volatility_after_1mo']}. "
-        f"This reflects a change in volatility of {row['volatility_change_1mo']}. "
+        f"Volatility in the 1 months before departure was {row['volatility_before_1mo']}. \n"
+        f"Volatility 1 month after the departure was {row['volatility_after_1mo']}. \n"
+        f"This reflects a change in volatility of {row['volatility_change_1mo']}. \n"
 
-        f"Average sentiment before the departure was {row['sentiment_before']}. "
-        f"After the departure, average sentiment was {row['sentiment_after']}. "
-        f"This represents a {'increase' if (row['sentiment_after'] - row['sentiment_before']) >= 0 else 'decrease'} in sentiment. "
+        f"Average sentiment before the departure was {row['sentiment_before']}. \n"
+        f"After the departure, average sentiment was {row['sentiment_after']}. \n"
+        f"This represents a {'increase' if (row['sentiment_after'] - row['sentiment_before']) >= 0 else 'decrease'} in sentiment. \n\n"
     )
 
 # chunk articles longer than 8k token limit
@@ -80,7 +81,7 @@ def verbalize_article_chunks(row, chunk_len=32000, overlap=200):
         chunk = (
             f"This is a chunk of an article written {'before' if row['turnover_before'] == 0 else 'after'} "
             f"the turnover of {row['name']} at {row['company']} in {row['end_year']}, "
-            f"with a sentiment score of {row['sentiment_score']:.2f}. {subtext}"
+            f"with a sentiment score of {row['sentiment_score']:.2f}. {subtext}\n\n"
         )
         chunks.append(chunk)
     return chunks
@@ -150,6 +151,12 @@ def index():
 def chatbot_response():
     message = request.form["message"]
     query = message
+    
+    if query.lower() == 'help':
+        ceos = get_random_ceos(3)
+        ceo_list = "\n".join([f"- {ceo[0]} ({ceo[1]})" for ceo in ceos])
+        return f"Here are a few CEOs and their companies to get started:\n{ceo_list}"
+    
     prompt = "Using primarily the following information, please tell me "
     
     if classify_query(query) == 'articles':
@@ -170,8 +177,9 @@ def chatbot_response():
     )
 
     #print(chat_response.choices[0].message.content)
-    return str(chat_response.choices[0].message.content)
+    response_text = str(chat_response.choices[0].message.content)
+    return Markup(response_text.replace('\n', '<br>'))
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(host="0.0.0.0", debug=True, port=5001)
     

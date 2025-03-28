@@ -8,10 +8,6 @@ import faiss
 import time
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_community.vectorstores import FAISS
-from flask import Flask, render_template, request
-
-# Initialize User Interface
-app = Flask (__name__)
 
 load_dotenv()
 api_key = os.getenv("MISTRAL_API_KEY")
@@ -142,16 +138,13 @@ embeddings = np.array(get_embeddings_by_chunks(texts, 100))
 art_embeddings = np.array(get_embeddings_by_chunks(article_text_chunks, 20))
 
 
-  
+while True:
+    user_input = input("You: ")
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+    if user_input.lower() == 'quit':
+        break
 
-@app.route("/get", methods=["GET", "POST"])
-def chatbot_response():
-    message = request.form["message"]
-    query = message
+    query = user_input
     prompt = "Using primarily the following information, please tell me "
     
     if classify_query(query) == 'articles':
@@ -171,8 +164,4 @@ def chatbot_response():
         ]
     )
 
-   #print(chat_response.choices[0].message.content)
-    return str(chat_response.choices[0].message.content)
-
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    print(chat_response.choices[0].message.content)

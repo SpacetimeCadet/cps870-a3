@@ -10,7 +10,7 @@ API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # Load CSV data
 exec_data = pd.read_csv("nlp/new/actually_good.csv")
-turnover_data = pd.read_csv("CHECKME.csv")
+turnover_data = pd.read_csv("CHECKME.csv") # this is actually sentiment cssv
 stock_data = pd.read_csv("nlp/new/turnover.csv")
 
 class ConversationState:

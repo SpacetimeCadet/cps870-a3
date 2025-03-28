@@ -5,17 +5,17 @@ from mistralai import Mistral
 import pandas as pd
 import numpy as np
 import faiss
+import time
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_community.vectorstores import FAISS
 
-# os.environ["MISTRAL_API_KEY"] = '1E8cvWLEDXNlhEdLYo4AGcDocFCfv3v9'
 load_dotenv()
 api_key = os.getenv("MISTRAL_API_KEY")
 
 llm = Mistral(api_key = api_key)
 chat_model = "mistral-large-latest"
 embedding_model = "mistral-embed"
-file_path = ('.data/perf_data.csv')
+file_path = ('./data/perf_data.csv')
 
 df = pd.read_csv(file_path)
 # exec_name,company,end_year,ticker,
@@ -26,8 +26,8 @@ df = pd.read_csv(file_path)
 
 def verbalize(row):
     return (
-        f"Executive {row['exec_name']} left {row['ticker']} {row['company']} in {row['end_month']}-{row['end_year']}. "
-        f"{row['exec_name']} had a tenure length of {row['tenure_len']} starting from {row['start_year']} to {row['end_year']}. "
+        f"Executive {row['exec_name']} left {row['ticker']} {row['company']} in {row['end_month']}/{row['end_year']}. "
+        f"{row['exec_name']} had a tenure length of {row['tenure_len']} years starting from {row['start_year']} to {row['end_year']}. "
         
         f"The average closing price over the 12 months before departure was ${row['avg_close_before']}."
         f"In the 12 months after, the average closing price was ${row['avg_close_after']}."
@@ -59,9 +59,11 @@ def verbalize(row):
 
 def get_embeddings_by_chunks(data, chunk_size):
     chunks = [data[x : x + chunk_size] for x in range(0, len(data), chunk_size)]
-    embeddings_response = [
-        llm.embeddings.create(model=embedding_model, inputs = c) for c in chunks
-    ]
+    embeddings_response = []
+    for c in chunks:
+        response = llm.embeddings.create(model=embedding_model, inputs=c)
+        embeddings_response.append(response)
+        time.sleep(1) 
     return [d.embedding for e in embeddings_response for d in e.data]
 
 def retrieve(texts, embeddings, query, k=7):
@@ -75,10 +77,11 @@ def retrieve(texts, embeddings, query, k=7):
         model=embedding_model,
         inputs=query,
     )
+    time.sleep(1)
     query_embedding = np.array(query_embedding.data[0].embedding).reshape(1, -1)
     # Search in FAISS
     _, indices = index.search(query_embedding, k)
-    print(indices)
+    # print(indices)
     retrieved_docs = [texts[i] for i in indices[0]]
     return retrieved_docs
 
@@ -95,30 +98,37 @@ texts = df.apply(verbalize, axis=1).tolist()
 #     inputs=texts,
 # )
 embeddings = np.array(get_embeddings_by_chunks(texts, 100))
-query = "Which executive left American Airlines most recently"
-prompt = "Given the following information, please tell me "
-retrieved_texts = retrieve(texts, embeddings, query)
-input = prompt + query + "\n" + retrieved_texts[0]
-print(retrieved_texts[0])
-# for doc in embeddings:
-#     print(doc)
-#     i +=1
-#     if i > 3:
-#         break
+# query = "Which executive left American Airlines most recently"
+# prompt = "Given the following information, please tell me "
+# retrieved_texts = retrieve(texts, embeddings, query)
+# input = prompt + query + "\n" + retrieved_texts[0]
+# print(retrieved_texts[0])
+
 # query_embedding = llm.embeddings.create(
 #         model=embedding_model,
 #         inputs='whats ur fav food',
 #     )
 # print(type(np.array(query_embedding.data[0].embedding).reshape(1, -1)))
 
-chat_response = llm.chat.complete(
-    model = chat_model,
-    messages = [
-        {
-            "role": "user",
-            "content": f"{input}",
-        },
-    ]
-)
+while True:
+    user_input = input("You: ")
 
-print(chat_response.choices[0].message.content)
+    if user_input.lower() == 'quit':
+        break
+
+    query = user_input
+    prompt = "Using primarily the following information, please tell me "
+    retrieved_texts = retrieve(texts, embeddings, query)
+    print(f'retrieved texts: {retrieved_texts}\n')
+    input_text = prompt + query + "\n" + retrieved_texts[0]
+    chat_response = llm.chat.complete(
+        model = chat_model,
+        messages = [
+            {
+                "role": "user",
+                "content": f"{input_text}",
+            },
+        ]
+    )
+
+    print(chat_response.choices[0].message.content)

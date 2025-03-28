@@ -119,7 +119,7 @@ while True:
     query = user_input
     prompt = "Using primarily the following information, please tell me "
     retrieved_texts = retrieve(texts, embeddings, query)
-    print(f'retrieved texts: {retrieved_texts}\n')
+    # print(f'retrieved texts: {retrieved_texts}\n')
     input_text = prompt + query + "\n" + retrieved_texts[0]
     chat_response = llm.chat.complete(
         model = chat_model,

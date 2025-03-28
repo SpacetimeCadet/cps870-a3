@@ -1,4 +1,4 @@
-name,company,year,turnover_type,sentiment,turnover_before
+name,mic,year,turnover_type,sentiment,turnover_before
 Derek Kerr,AMERICAN AIRLINES GROUP INC,2022,Voluntary,0.8049,0
 Derek Kerr,AMERICAN AIRLINES GROUP INC,2022,Voluntary,0.9946,1
 "Sandeep Chennakeshu, Ph.D.",ADVANCED MICRO DEVICES,2019,Voluntary,0.95866,0

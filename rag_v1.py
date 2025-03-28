@@ -103,7 +103,13 @@ def get_embeddings_by_chunks(data, chunk_size):
 # what happened after Y left?	                facts + articles
 
 def classify_query(query):
-    if any(w in query.lower() for w in ['article']): # ["why", "reason", "explain", "because", "media said", "reacted"]):
+    explanatory_keywords = [
+        'why', 'reason', 'explain', 'because', 
+        'how come', 'cause', 'due to', 'factor',
+        'led to', 'resulted in', 'what led', 
+        'driving', 'underlying', 'behind'
+    ]
+    if any(w in query.lower() for w in explanatory_keywords): # ["why", "reason", "explain", "because", "media said", "reacted"]):
         return "articles"
     elif any(w in query.lower() for w in ["score", "how much", "percent", "change", "value", "volatility", "stock"]):
         return "facts"
